@@ -127,14 +127,6 @@ src/
     └── valuations.ts         # Valuation endpoints
 ```
 
-### Documentation (`_docs/`)
-
-- `000_problem_statement.md` - Original requirements
-- `000_vc-audit-tool.md` - Detailed design document
-- `SCHEMA.md` - Database schema explanation
-- `TRADEOFFS.md` - Architecture decisions and tradeoffs
-- `TANSTACK_QUERY_EXPLAINED.md` - Frontend state management
-
 ## Prerequisites
 
 - **[uv](https://docs.astral.sh/uv/)** - Python package manager
