@@ -1,6 +1,6 @@
 # VC Audit Tool
 
-A production-ready portfolio valuation platform for VC auditors to estimate fair values of private, illiquid portfolio companies. Implements multiple valuation methodologies with comprehensive audit trails for compliance and reproducibility.
+A portfolio valuation platform for VC auditors to estimate fair values of private, illiquid portfolio companies. Implements multiple valuation methodologies with comprehensive audit trails for compliance and reproducibility.
 
 ## Overview
 
