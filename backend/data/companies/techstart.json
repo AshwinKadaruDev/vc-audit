@@ -1,0 +1,24 @@
+{
+  "company": {
+    "id": "techstart",
+    "name": "TechStart Inc",
+    "sector": "fintech",
+    "stage": "seed",
+    "founded_date": "2024-01-10"
+  },
+  "financials": {
+    "revenue_ttm": null,
+    "revenue_growth_yoy": null,
+    "gross_margin": null,
+    "burn_rate": "150000",
+    "runway_months": 14
+  },
+  "last_round": {
+    "date": "2025-06-01",
+    "valuation_pre": "8000000",
+    "valuation_post": "10000000",
+    "amount_raised": "2000000",
+    "lead_investor": "Y Combinator"
+  },
+  "adjustments": []
+}

@@ -1,0 +1,18 @@
+{
+  "company": {
+    "id": "prerevenue_no_round",
+    "name": "Stealth Labs",
+    "sector": "saas",
+    "stage": "seed",
+    "founded_date": "2025-09-01"
+  },
+  "financials": {
+    "revenue_ttm": null,
+    "revenue_growth_yoy": null,
+    "gross_margin": null,
+    "burn_rate": "50000",
+    "runway_months": 8
+  },
+  "last_round": null,
+  "adjustments": []
+}

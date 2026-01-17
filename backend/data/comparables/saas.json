@@ -1,0 +1,60 @@
+{
+  "sector": "saas",
+  "as_of_date": "2026-01-15",
+  "companies": [
+    {
+      "ticker": "CRM",
+      "name": "Salesforce",
+      "sector": "saas",
+      "revenue_ttm": "34860000000",
+      "market_cap": "276000000000",
+      "ev_revenue_multiple": "7.9",
+      "revenue_growth_yoy": "0.11"
+    },
+    {
+      "ticker": "NOW",
+      "name": "ServiceNow",
+      "sector": "saas",
+      "revenue_ttm": "9150000000",
+      "market_cap": "168000000000",
+      "ev_revenue_multiple": "18.4",
+      "revenue_growth_yoy": "0.24"
+    },
+    {
+      "ticker": "WDAY",
+      "name": "Workday",
+      "sector": "saas",
+      "revenue_ttm": "7260000000",
+      "market_cap": "69000000000",
+      "ev_revenue_multiple": "9.5",
+      "revenue_growth_yoy": "0.17"
+    },
+    {
+      "ticker": "DDOG",
+      "name": "Datadog",
+      "sector": "saas",
+      "revenue_ttm": "2120000000",
+      "market_cap": "42000000000",
+      "ev_revenue_multiple": "19.8",
+      "revenue_growth_yoy": "0.26"
+    },
+    {
+      "ticker": "ZS",
+      "name": "Zscaler",
+      "sector": "saas",
+      "revenue_ttm": "1900000000",
+      "market_cap": "28000000000",
+      "ev_revenue_multiple": "14.7",
+      "revenue_growth_yoy": "0.35"
+    },
+    {
+      "ticker": "SNOW",
+      "name": "Snowflake",
+      "sector": "saas",
+      "revenue_ttm": "3100000000",
+      "market_cap": "56000000000",
+      "ev_revenue_multiple": "18.1",
+      "revenue_growth_yoy": "0.32"
+    }
+  ]
+}

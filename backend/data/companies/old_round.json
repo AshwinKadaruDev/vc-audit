@@ -1,0 +1,30 @@
+{
+  "company": {
+    "id": "old_round",
+    "name": "Legacy Tech",
+    "sector": "saas",
+    "stage": "series_a",
+    "founded_date": "2020-02-01"
+  },
+  "financials": {
+    "revenue_ttm": "5000000",
+    "revenue_growth_yoy": "0.35",
+    "gross_margin": "0.70",
+    "burn_rate": "300000",
+    "runway_months": 12
+  },
+  "last_round": {
+    "date": "2023-01-15",
+    "valuation_pre": "20000000",
+    "valuation_post": "25000000",
+    "amount_raised": "5000000",
+    "lead_investor": "First Round Capital"
+  },
+  "adjustments": [
+    {
+      "name": "Slower Growth",
+      "factor": "0.95",
+      "reason": "Growth has decelerated below sector average"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "company": {
+    "id": "basis_ai",
+    "name": "Basis AI",
+    "sector": "saas",
+    "stage": "series_a",
+    "founded_date": "2021-03-15"
+  },
+  "financials": {
+    "revenue_ttm": "10000000",
+    "revenue_growth_yoy": "1.20",
+    "gross_margin": "0.75",
+    "burn_rate": "500000",
+    "runway_months": 18
+  },
+  "last_round": {
+    "date": "2025-04-15",
+    "valuation_pre": "40000000",
+    "valuation_post": "50000000",
+    "amount_raised": "10000000",
+    "lead_investor": "Sequoia Capital"
+  },
+  "adjustments": [
+    {
+      "name": "Strong Team",
+      "factor": "1.05",
+      "reason": "Experienced founding team with prior exits"
+    },
+    {
+      "name": "Market Position",
+      "factor": "1.03",
+      "reason": "Leading position in emerging AI vertical"
+    }
+  ]
+}

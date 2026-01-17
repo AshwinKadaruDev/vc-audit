@@ -1,0 +1,30 @@
+{
+  "company": {
+    "id": "growthco",
+    "name": "GrowthCo Analytics",
+    "sector": "saas",
+    "stage": "series_b",
+    "founded_date": "2019-08-20"
+  },
+  "financials": {
+    "revenue_ttm": "25000000",
+    "revenue_growth_yoy": "0.65",
+    "gross_margin": "0.82",
+    "burn_rate": "800000",
+    "runway_months": 24
+  },
+  "last_round": {
+    "date": "2024-06-15",
+    "valuation_pre": "100000000",
+    "valuation_post": "125000000",
+    "amount_raised": "25000000",
+    "lead_investor": "Andreessen Horowitz"
+  },
+  "adjustments": [
+    {
+      "name": "Enterprise Traction",
+      "factor": "1.08",
+      "reason": "Signed 3 Fortune 500 contracts in last quarter"
+    }
+  ]
+}

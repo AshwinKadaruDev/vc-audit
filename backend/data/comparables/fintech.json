@@ -1,0 +1,51 @@
+{
+  "sector": "fintech",
+  "as_of_date": "2026-01-15",
+  "companies": [
+    {
+      "ticker": "SQ",
+      "name": "Block (Square)",
+      "sector": "fintech",
+      "revenue_ttm": "21500000000",
+      "market_cap": "47000000000",
+      "ev_revenue_multiple": "2.2",
+      "revenue_growth_yoy": "0.18"
+    },
+    {
+      "ticker": "PYPL",
+      "name": "PayPal",
+      "sector": "fintech",
+      "revenue_ttm": "30200000000",
+      "market_cap": "72000000000",
+      "ev_revenue_multiple": "2.4",
+      "revenue_growth_yoy": "0.08"
+    },
+    {
+      "ticker": "AFRM",
+      "name": "Affirm",
+      "sector": "fintech",
+      "revenue_ttm": "2300000000",
+      "market_cap": "17000000000",
+      "ev_revenue_multiple": "7.4",
+      "revenue_growth_yoy": "0.41"
+    },
+    {
+      "ticker": "SOFI",
+      "name": "SoFi Technologies",
+      "sector": "fintech",
+      "revenue_ttm": "2400000000",
+      "market_cap": "14000000000",
+      "ev_revenue_multiple": "5.8",
+      "revenue_growth_yoy": "0.34"
+    },
+    {
+      "ticker": "BILL",
+      "name": "Bill.com",
+      "sector": "fintech",
+      "revenue_ttm": "1280000000",
+      "market_cap": "8500000000",
+      "ev_revenue_multiple": "6.6",
+      "revenue_growth_yoy": "0.22"
+    }
+  ]
+}
