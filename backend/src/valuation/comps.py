@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Optional
 
 from src.config import ValuationConfig
-from src.data.loader import DataLoader
+from src.database.loader import DataLoader
 from src.models import (
     ComparableCompany,
     ComparableSet,
@@ -96,6 +96,15 @@ class ComparablesMethod(ValuationMethod):
                 "growth": growth,
             })
 
+        # Build data source info for citation
+        data_source_info = {}
+        if comps.source:
+            data_source_info = {
+                "name": comps.source.name,
+                "retrieved_at": comps.source.retrieved_at.isoformat(),
+                "citation": f"Public comparable data from {comps.source.name}",
+            }
+
         self._add_step(
             description="Comparable Public Companies",
             inputs={
@@ -103,6 +112,7 @@ class ComparablesMethod(ValuationMethod):
                 "sector": sector.replace("_", " ").title(),
                 "data_as_of": comps.as_of_date.strftime("%B %d, %Y"),
                 "companies": comparable_list,
+                "data_source": data_source_info,
             },
             result=f"Found {len(comps.companies)} comparable public companies",
         )
@@ -166,11 +176,11 @@ class ComparablesMethod(ValuationMethod):
             result=f"Adjusted multiple: {round_decimal(adjusted_multiple, 2)}x",
         )
 
-        # Step 5: Calculate final value
-        final_value = revenue * adjusted_multiple
+        # Step 5: Calculate base value from multiples
+        base_value = revenue * adjusted_multiple
 
         self._add_step(
-            description="Final Valuation Calculation",
+            description="Base Valuation Calculation",
             inputs={
                 "type": "final_calculation",
                 "revenue": format_currency(revenue),
@@ -179,15 +189,70 @@ class ComparablesMethod(ValuationMethod):
             calculation=(
                 f"{format_currency(revenue)} revenue × {round_decimal(adjusted_multiple, 2)}x multiple"
             ),
-            result=f"Estimated value: {format_currency(final_value)}",
+            result=f"Base value: {format_currency(base_value)}",
         )
 
-        confidence = self._determine_confidence(multiples, median_multiple)
+        # Step 6: Apply Company-Specific Adjustments
+        final_value, combined_factor, adjustment_derivation_parts = (
+            self._apply_company_adjustments(base_value, "base value")
+        )
+
+        # Step 7: Final Formula Summary
+        # Build variable derivations
+        revenue_derivation = f"Trailing twelve months revenue for {self.company_data.company.name}"
+
+        multiple_derivation = (
+            f"Median multiple ({round_decimal(median_multiple, 1)}x) with {discount_pct}% private discount"
+        )
+
+        if adjustment_derivation_parts:
+            company_adj_derivation = f"Product of: {', '.join(adjustment_derivation_parts)}"
+        else:
+            company_adj_derivation = "No adjustments applied (factor = 1.0)"
+
+        self._add_step(
+            description="Final Formula Summary",
+            inputs={
+                "type": "final_formula",
+                "formula_template": "V = R × M × C",
+                "formula_display": "Final Value = Revenue × Adjusted Multiple × Company Adjustments",
+                "formula_with_values": (
+                    f"{format_currency(revenue)} × {round_decimal(adjusted_multiple, 2)}x × "
+                    f"{round_decimal(combined_factor, 3)} = {format_currency(final_value)}"
+                ),
+                "variables": [
+                    {
+                        "name": "Annual Revenue",
+                        "symbol": "R",
+                        "value": format_currency(revenue),
+                        "derivation": revenue_derivation,
+                    },
+                    {
+                        "name": "Adjusted Multiple",
+                        "symbol": "M",
+                        "value": f"{round_decimal(adjusted_multiple, 2)}x",
+                        "derivation": multiple_derivation,
+                    },
+                    {
+                        "name": "Company Adjustments",
+                        "symbol": "C",
+                        "value": str(round_decimal(combined_factor, 3)),
+                        "derivation": company_adj_derivation,
+                    },
+                ],
+                "final_value": format_currency(final_value),
+                "method_name": "Comparables",
+            },
+            result=f"Final valuation: {format_currency(final_value)}",
+        )
+
+        confidence, confidence_explanation = self._determine_confidence(multiples, median_multiple)
 
         return MethodResult(
             method=self.method_name,
             value=round_decimal(final_value, 0),
             confidence=confidence,
+            confidence_explanation=confidence_explanation,
             audit_trail=self._audit_steps,
             warnings=self._warnings,
         )
@@ -219,18 +284,50 @@ class ComparablesMethod(ValuationMethod):
 
     def _determine_confidence(
         self, multiples: list[Decimal], median_multiple: Decimal
-    ) -> Confidence:
-        """Determine confidence based on multiple dispersion."""
+    ) -> tuple[Confidence, str]:
+        """Determine confidence based on multiple dispersion.
+
+        Returns:
+            Tuple of (confidence level, explanation string).
+        """
         if not multiples or median_multiple == 0:
-            return Confidence.LOW
+            explanation = (
+                "LOW confidence: Insufficient comparable data available to calculate "
+                "statistical confidence in the multiple selection."
+            )
+            return Confidence.LOW, explanation
 
         mean = sum(multiples) / len(multiples)
         variance = sum((m - mean) ** 2 for m in multiples) / len(multiples)
         std_dev = variance ** Decimal("0.5")
         cv = std_dev / mean if mean > 0 else Decimal("1")
 
+        min_multiple = min(multiples)
+        max_multiple = max(multiples)
+
         if cv < Decimal("0.3"):
-            return Confidence.HIGH
+            explanation = (
+                f"HIGH confidence: The comparable companies have consistent multiples "
+                f"(CV = {cv:.2f}, below 0.30 threshold). "
+                f"Multiples range from {min_multiple:.1f}x to {max_multiple:.1f}x "
+                f"with median {median_multiple:.1f}x."
+            )
+            return Confidence.HIGH, explanation
+
         if cv < Decimal("0.5"):
-            return Confidence.MEDIUM
-        return Confidence.LOW
+            explanation = (
+                f"MEDIUM confidence: The comparable multiples have moderate spread "
+                f"(CV = {cv:.2f}). Multiples range from {min_multiple:.1f}x to {max_multiple:.1f}x. "
+                f"A CV below 0.30 would indicate HIGH confidence (tight clustering), "
+                f"while above 0.50 would be LOW confidence."
+            )
+            return Confidence.MEDIUM, explanation
+
+        explanation = (
+            f"LOW confidence: The comparable multiples have high dispersion "
+            f"(CV = {cv:.2f}, above 0.50 threshold). "
+            f"Multiples range from {min_multiple:.1f}x to {max_multiple:.1f}x, "
+            f"indicating significant variation among comparable companies. "
+            f"Consider narrowing the peer group for better comparability."
+        )
+        return Confidence.LOW, explanation

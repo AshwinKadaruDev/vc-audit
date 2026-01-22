@@ -73,6 +73,8 @@ export function ValuationPage() {
               methodResults={result.method_results}
               skippedMethods={result.skipped_methods}
               methodComparison={result.summary.method_comparison}
+              overallConfidence={result.summary.overall_confidence}
+              overallConfidenceExplanation={result.summary.confidence_explanation}
             />
           </>
         )}

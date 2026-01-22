@@ -1,8 +1,5 @@
 """API routes for VC Audit Tool."""
 
-import random
-from datetime import date, datetime
-from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -21,10 +18,10 @@ from src.api.schemas import (
     ValuationRequest,
 )
 from src.config import get_settings
-from src.data.loader import DataLoader
+from src.database.loader import DataLoader
 from src.database import crud
 from src.database.database import get_db
-from src.engine.engine import ValuationEngine
+from src.valuation.engine import ValuationEngine
 from src.exceptions import (
     DataNotFoundError,
     NoValidMethodsError,
@@ -32,8 +29,7 @@ from src.exceptions import (
 )
 from src.models import ComparableSet, CompanyData, ValuationResult
 from src.services.portfolio_companies import PortfolioCompanyService
-from src.services.valuations import ValuationService
-from src.utils.serialization import make_json_serializable
+from src.services.valuations import ValuationService, convert_result_for_response
 
 router = APIRouter()
 
@@ -378,87 +374,19 @@ async def run_and_save_valuation(
         400: Other valuation errors.
     """
     try:
-        # Use the valuation service to run and save
-        result, saved_valuation_id = await service.run_and_save_valuation(
-            company_data
-        )
-
-        # Convert result to response format
-        method_results_data = []
-        for mr in result.method_results:
-            method_results_data.append(
-                {
-                    "method": mr.method,
-                    "value": str(mr.value),
-                    "confidence": mr.confidence,
-                    "audit_trail": [
-                        {
-                            "step_number": step.step_number,
-                            "description": step.description,
-                            "inputs": make_json_serializable(step.inputs),
-                            "calculation": step.calculation,
-                            "result": step.result,
-                        }
-                        for step in mr.audit_trail
-                    ],
-                    "warnings": mr.warnings,
-                }
-            )
-
-        skipped_methods_data = [
-            {"method": sm.method, "reason": sm.reason} for sm in result.skipped_methods
-        ]
-
-        summary_data = {
-            "primary_value": str(result.summary.primary_value),
-            "primary_method": result.summary.primary_method,
-            "value_range_low": (
-                str(result.summary.value_range_low)
-                if result.summary.value_range_low
-                else None
-            ),
-            "value_range_high": (
-                str(result.summary.value_range_high)
-                if result.summary.value_range_high
-                else None
-            ),
-            "overall_confidence": result.summary.overall_confidence,
-            "summary_text": result.summary.summary_text,
-            "selection_reason": result.summary.selection_reason,
-        }
-
-        if result.summary.method_comparison:
-            summary_data["method_comparison"] = {
-                "methods": [
-                    {
-                        "method": m.method,
-                        "value": str(m.value),
-                        "confidence": m.confidence,
-                        "is_primary": m.is_primary,
-                    }
-                    for m in result.summary.method_comparison.methods
-                ],
-                "spread_percent": (
-                    str(result.summary.method_comparison.spread_percent)
-                    if result.summary.method_comparison.spread_percent
-                    else None
-                ),
-                "spread_warning": result.summary.method_comparison.spread_warning,
-                "selection_steps": result.summary.method_comparison.selection_steps,
-            }
-
-        config_snapshot_data = make_json_serializable(result.config_snapshot)
+        result, saved_valuation_id = await service.run_and_save_valuation(company_data)
+        converted = convert_result_for_response(result)
 
         return SavedValuationResponse(
             id=saved_valuation_id,
             company_id=result.company_id,
             company_name=result.company_name,
             valuation_date=result.valuation_date,
-            summary=summary_data,
-            method_results=method_results_data,
-            skipped_methods=skipped_methods_data,
+            summary=converted["summary"],
+            method_results=converted["method_results"],
+            skipped_methods=converted["skipped_methods"],
             cross_method_analysis=result.cross_method_analysis,
-            config_snapshot=config_snapshot_data,
+            config_snapshot=converted["config_snapshot"],
         )
 
     except NoValidMethodsError as e:

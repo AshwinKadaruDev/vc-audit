@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { MethodResult, AuditStep, MethodSkipped, MethodComparisonData, MethodName } from '../types';
+import type { MethodResult, AuditStep, MethodSkipped, MethodComparisonData, MethodName, DataSourceInfo, Confidence } from '../types';
 import { formatCurrency, getMethodDisplayName } from '../utils/formatting';
 import { getConfidenceColor, getConfidenceBgClass } from '../utils/confidence';
 import { InfoTooltip } from './InfoTooltip';
@@ -8,6 +8,8 @@ interface AuditTrailProps {
   methodResults: MethodResult[];
   skippedMethods: MethodSkipped[];
   methodComparison?: MethodComparisonData;
+  overallConfidence?: Confidence;
+  overallConfidenceExplanation?: string;
 }
 
 interface ComparableCompany {
@@ -25,12 +27,30 @@ interface Adjustment {
   reason: string;
 }
 
+interface FormulaVariable {
+  name: string;
+  symbol: string;
+  value: string;
+  derivation: string;
+}
+
+function SourceCitation({ source }: { source: DataSourceInfo }) {
+  return (
+    <div className="text-xs text-neutral-500 mt-3 pt-3 border-t border-neutral-200 flex items-center gap-1.5">
+      <span className="text-neutral-400">Source:</span>
+      <span>{source.citation}</span>
+    </div>
+  );
+}
+
 // Methods Summary Section Component
 interface MethodsSummaryProps {
   methodComparison: MethodComparisonData;
+  overallConfidence?: Confidence;
+  overallConfidenceExplanation?: string;
 }
 
-function MethodsSummary({ methodComparison }: MethodsSummaryProps) {
+function MethodsSummary({ methodComparison, overallConfidence, overallConfidenceExplanation }: MethodsSummaryProps) {
   return (
     <div className="space-y-4">
       {/* Methods Table */}
@@ -72,6 +92,21 @@ function MethodsSummary({ methodComparison }: MethodsSummaryProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Overall Confidence Explanation */}
+      {overallConfidenceExplanation && (
+        <div className="p-3 bg-neutral-50 border border-neutral-200 rounded">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-medium text-default-font">Overall Confidence:</span>
+            {overallConfidence && (
+              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getConfidenceBgClass(overallConfidence)} ${getConfidenceColor(overallConfidence)}`}>
+                {overallConfidence.charAt(0).toUpperCase() + overallConfidence.slice(1)}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-neutral-600">{overallConfidenceExplanation}</p>
+        </div>
+      )}
 
       {/* Spread Warning */}
       {methodComparison.spread_warning && (
@@ -124,6 +159,7 @@ function InputRenderer({ inputs }: { inputs: Record<string, unknown> }) {
     const direction = inputs.market_direction as string;
     const isUp = direction === 'increased';
     const changeColor = isUp ? 'text-green-600' : direction === 'decreased' ? 'text-red-600' : 'text-neutral-600';
+    const dataSource = inputs.data_source as DataSourceInfo | undefined;
 
     return (
       <div className="space-y-4">
@@ -157,6 +193,8 @@ function InputRenderer({ inputs }: { inputs: Record<string, unknown> }) {
           <span className="text-subtext">Adjusted valuation change: </span>
           <span className={`font-bold ${changeColor}`}>{inputs.adjusted_change_percent as string}</span>
         </div>
+
+        {dataSource && <SourceCitation source={dataSource} />}
       </div>
     );
   }
@@ -227,6 +265,7 @@ function InputRenderer({ inputs }: { inputs: Record<string, unknown> }) {
   // Comparable Companies
   if (type === 'comparable_companies') {
     const companies = inputs.companies as ComparableCompany[];
+    const dataSource = inputs.data_source as DataSourceInfo | undefined;
     return (
       <div className="space-y-3">
         <div className="text-sm text-subtext">
@@ -259,6 +298,7 @@ function InputRenderer({ inputs }: { inputs: Record<string, unknown> }) {
             </tbody>
           </table>
         </div>
+        {dataSource && <SourceCitation source={dataSource} />}
       </div>
     );
   }
@@ -336,6 +376,49 @@ function InputRenderer({ inputs }: { inputs: Record<string, unknown> }) {
     );
   }
 
+  // Final Formula Summary
+  if (type === 'final_formula') {
+    const variables = inputs.variables as FormulaVariable[];
+    return (
+      <div className="space-y-4">
+        {/* Formula Display - compact */}
+        <div className="text-sm">
+          <span className="text-subtext">Formula: </span>
+          <span className="text-default-font">{inputs.formula_display as string}</span>
+          <span className="text-subtext ml-2 font-mono text-xs">({inputs.formula_template as string})</span>
+        </div>
+
+        {/* Variables/Components - compact table style */}
+        <div className="border border-neutral-200 rounded divide-y divide-neutral-100">
+          {variables.map((variable) => (
+            <div key={variable.symbol} className="flex items-center px-3 py-2 text-sm">
+              <span className="w-6 h-6 rounded bg-primary-100 text-primary-600 font-semibold text-xs flex items-center justify-center flex-shrink-0">
+                {variable.symbol}
+              </span>
+              <div className="ml-3 flex-1 min-w-0">
+                <span className="font-medium text-default-font">{variable.name}</span>
+                <span className="text-subtext ml-1 text-xs">— {variable.derivation}</span>
+              </div>
+              <span className="font-semibold text-primary-600 ml-2 flex-shrink-0">{variable.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Calculation with values - inline */}
+        <div className="bg-neutral-50 border border-neutral-200 rounded px-3 py-2">
+          <span className="text-xs text-subtext mr-2">Calculation:</span>
+          <span className="text-sm font-mono text-default-font">{inputs.formula_with_values as string}</span>
+        </div>
+
+        {/* Final Value - compact highlight */}
+        <div className="bg-primary-50 border border-primary-200 rounded px-4 py-3 flex items-center justify-between">
+          <span className="text-sm font-medium text-primary-700">Final Valuation</span>
+          <span className="text-xl font-bold text-primary-600">{inputs.final_value as string}</span>
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -407,6 +490,8 @@ export function AuditTrail({
   methodResults,
   skippedMethods,
   methodComparison,
+  overallConfidence,
+  overallConfidenceExplanation,
 }: AuditTrailProps) {
   const [activeMethod, setActiveMethod] = useState(0);
 
@@ -448,7 +533,11 @@ export function AuditTrail({
               </InfoTooltip>
             )}
           </div>
-          <MethodsSummary methodComparison={methodComparison} />
+          <MethodsSummary
+            methodComparison={methodComparison}
+            overallConfidence={overallConfidence}
+            overallConfidenceExplanation={overallConfidenceExplanation}
+          />
         </div>
       )}
 
@@ -469,19 +558,28 @@ export function AuditTrail({
         )}
 
         {/* Active method header */}
-        <div className="px-6 py-5 flex items-center justify-between bg-primary-50/30 border-b border-primary-100">
-          <div>
-            <h4 className="font-semibold text-default-font text-base">
-              {getMethodDisplayName(activeResult.method)} Method
-            </h4>
-            <p className="text-xs text-subtext mt-0.5">Step-by-step calculation</p>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-primary-600">{formatCurrency(activeResult.value)}</div>
-            <div className={`text-xs font-semibold mt-1 ${getConfidenceColor(activeResult.confidence)}`}>
-              {activeResult.confidence.charAt(0).toUpperCase() + activeResult.confidence.slice(1)} Confidence
+        <div className="px-6 py-5 bg-primary-50/30 border-b border-primary-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-default-font text-base">
+                {getMethodDisplayName(activeResult.method)}
+              </h4>
+              <p className="text-xs text-subtext mt-0.5">Step-by-step calculation</p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-primary-600">{formatCurrency(activeResult.value)}</div>
+              <div className={`text-xs font-semibold mt-1 ${getConfidenceColor(activeResult.confidence)}`}>
+                {activeResult.confidence.charAt(0).toUpperCase() + activeResult.confidence.slice(1)} Confidence
+              </div>
             </div>
           </div>
+          {/* Method Confidence Explanation */}
+          {activeResult.confidence_explanation && (
+            <div className="mt-3 p-3 bg-white/80 rounded border border-neutral-200 text-sm text-neutral-600">
+              <span className="font-medium text-neutral-700">How was this calculated? </span>
+              {activeResult.confidence_explanation}
+            </div>
+          )}
         </div>
 
         {/* Steps */}

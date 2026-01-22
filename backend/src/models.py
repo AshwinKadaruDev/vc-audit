@@ -142,11 +142,21 @@ class CompanyData(BaseModel):
 # Market Models
 # ============================================================================
 
+class DataSource(BaseModel):
+    """Data source citation for audit trail."""
+    name: str  # e.g., "Yahoo Finance API"
+    retrieved_at: date  # When data was fetched
+    # All data is currently seeded from JSON files. This flag is for future use
+    # when real data integrations are added.
+    is_mock: bool = True
+
+
 class MarketIndex(BaseModel):
     """Market index data point."""
     date: date
     value: Decimal
     name: str
+    source_name: str = "Yahoo Finance API"
 
 
 class ComparableCompany(BaseModel):
@@ -158,6 +168,7 @@ class ComparableCompany(BaseModel):
     market_cap: Decimal
     ev_revenue_multiple: Decimal
     revenue_growth_yoy: Optional[Decimal] = None
+    source_name: str = "Yahoo Finance API"
 
 
 class ComparableSet(BaseModel):
@@ -165,6 +176,7 @@ class ComparableSet(BaseModel):
     sector: str
     as_of_date: date
     companies: list[ComparableCompany]
+    source: Optional[DataSource] = None
 
 
 # ============================================================================
@@ -185,6 +197,10 @@ class MethodResult(BaseModel):
     method: MethodName
     value: Decimal
     confidence: Confidence
+    confidence_explanation: str = Field(
+        default="",
+        description="Plain-language explanation of how confidence was determined"
+    )
     audit_trail: list[AuditStep]
     warnings: list[str] = Field(default_factory=list)
 
@@ -227,6 +243,10 @@ class ValuationSummary(BaseModel):
     value_range_low: Optional[Decimal] = None
     value_range_high: Optional[Decimal] = None
     overall_confidence: Confidence
+    confidence_explanation: str = Field(
+        default="",
+        description="Plain-language explanation of how overall confidence was determined"
+    )
     summary_text: str
     selection_reason: str = Field(
         default="",

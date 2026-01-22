@@ -89,19 +89,12 @@ vc-audit-tool/
 │   │   │   ├── routes.py       # API endpoints
 │   │   │   └── schemas.py      # Request/Response schemas
 │   │   │
-│   │   ├── data/
-│   │   │   ├── __init__.py
-│   │   │   └── loader.py       # DataLoader class
-│   │   │
-│   │   ├── methods/
+│   │   ├── valuation/
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py         # Abstract base + registry
+│   │   │   ├── engine.py       # ValuationEngine (selector + executor)
 │   │   │   ├── last_round.py   # Last Round Adjusted
 │   │   │   └── comps.py        # Comparable Company Analysis
-│   │   │
-│   │   ├── engine/
-│   │   │   ├── __init__.py
-│   │   │   └── engine.py       # ValuationEngine (selector + executor)
 │   │   │
 │   │   └── utils/
 │   │       ├── __init__.py
@@ -919,7 +912,7 @@ class CalculationError(ValuationError):
 ## 7. Data Loading Layer
 
 ```python
-# backend/src/data/loader.py
+# backend/src/database/loader.py
 
 import json
 from pathlib import Path
@@ -1141,7 +1134,7 @@ class DataLoader:
 ### 8.1 Base Class and Registry
 
 ```python
-# backend/src/methods/base.py
+# backend/src/valuation/base.py
 
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -1282,13 +1275,13 @@ class MethodRegistry:
 ### 8.2 Last Round Adjusted Method
 
 ```python
-# backend/src/methods/last_round.py
+# backend/src/valuation/last_round.py
 
 from typing import Optional
 from decimal import Decimal
 from datetime import date
 
-from src.methods.base import ValuationMethod, MethodRegistry
+from src.valuation.base import ValuationMethod, MethodRegistry
 from src.models import (
     MethodName, MethodResult, Confidence,
     CompanyData, MarketIndex, ComparableSet
@@ -1475,13 +1468,13 @@ class LastRoundAdjustedMethod(ValuationMethod):
 ### 8.3 Comparable Company Method
 
 ```python
-# backend/src/methods/comps.py
+# backend/src/valuation/comps.py
 
 from typing import Optional
 from decimal import Decimal
 from datetime import date
 
-from src.methods.base import ValuationMethod, MethodRegistry
+from src.valuation.base import ValuationMethod, MethodRegistry
 from src.models import (
     MethodName, MethodResult, Confidence,
     CompanyData, MarketIndex, ComparableSet
@@ -1674,7 +1667,7 @@ class ComparableCompanyMethod(ValuationMethod):
 ## 9. Valuation Engine
 
 ```python
-# backend/src/engine/engine.py
+# backend/src/valuation/engine.py
 
 from datetime import date, datetime
 from decimal import Decimal
@@ -1688,7 +1681,7 @@ from src.models import (
     CompanyData, MarketIndex, ComparableSet,
     ValuationResult, ValuationSummary, MethodResult, MethodSkipped, Confidence
 )
-from src.methods.base import MethodRegistry, ValuationMethod
+from src.valuation.base import MethodRegistry, ValuationMethod
 from src.exceptions import NoValidMethodsError, CalculationError
 
 
@@ -2019,8 +2012,8 @@ from src.api.schemas import (
     ErrorResponse, HealthResponse
 )
 from src.models import ValuationResult
-from src.data.loader import DataLoader
-from src.engine.engine import ValuationEngine
+from src.database.loader import DataLoader
+from src.valuation.engine import ValuationEngine
 from src.config import ValuationConfig, get_settings, Settings
 from src.exceptions import (
     ValuationError, DataNotFoundError, NoValidMethodsError
@@ -2963,7 +2956,7 @@ def sample_comparables():
 import pytest
 from datetime import date
 
-from src.engine.engine import ValuationEngine
+from src.valuation.engine import ValuationEngine
 from src.exceptions import NoValidMethodsError
 
 
@@ -3158,9 +3151,9 @@ npm run dev
 ## Adding a New Valuation Method
 
 ```python
-# src/methods/new_method.py
+# src/valuation/new_method.py
 
-from src.methods.base import ValuationMethod, MethodRegistry
+from src.valuation.base import ValuationMethod, MethodRegistry
 from src.models import MethodName, MethodResult
 
 @MethodRegistry.register

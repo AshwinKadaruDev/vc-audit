@@ -93,7 +93,8 @@ class Settings(BaseSettings):
     # Application
     environment: str = Field(default="development")
 
-    # Data paths
+    # Data paths - ONLY used during setup.ps1 to seed the database via Alembic migrations.
+    # Runtime data reads come from the database, not from these directories.
     data_dir: Path = Field(default=Path("data"))
 
     # Valuation config

@@ -6,50 +6,45 @@ from uuid import UUID
 
 from src.database import crud
 from src.database.database import get_db_context
-from src.engine.engine import ValuationEngine
+from src.valuation.engine import ValuationEngine
 from src.models import CompanyData, ValuationResult
 from src.utils.serialization import make_json_serializable
 
 
-def _convert_valuation_result_to_db_format(
-    result: ValuationResult,
-) -> dict[str, Any]:
-    """Convert ValuationResult to database-compatible format.
-
-    Args:
-        result: The valuation result from the engine.
-
-    Returns:
-        Dictionary with converted data ready for database storage.
-    """
-    # Convert method results
-    method_results_data = []
-    for mr in result.method_results:
-        method_results_data.append(
-            {
-                "method": mr.method.value,
-                "value": str(mr.value),
-                "confidence": mr.confidence.value,
-                "audit_trail": [
-                    {
-                        "step_number": step.step_number,
-                        "description": step.description,
-                        "inputs": make_json_serializable(step.inputs),
-                        "calculation": step.calculation,
-                        "result": step.result,
-                    }
-                    for step in mr.audit_trail
-                ],
-                "warnings": mr.warnings,
-            }
-        )
-
-    # Convert skipped methods
-    skipped_methods_data = [
-        {"method": sm.method.value, "reason": sm.reason} for sm in result.skipped_methods
+def _convert_method_results(result: ValuationResult) -> list[dict[str, Any]]:
+    """Convert method results to serializable format."""
+    return [
+        {
+            "method": mr.method.value,
+            "value": str(mr.value),
+            "confidence": mr.confidence.value,
+            "confidence_explanation": mr.confidence_explanation,
+            "audit_trail": [
+                {
+                    "step_number": step.step_number,
+                    "description": step.description,
+                    "inputs": make_json_serializable(step.inputs),
+                    "calculation": step.calculation,
+                    "result": step.result,
+                }
+                for step in mr.audit_trail
+            ],
+            "warnings": mr.warnings,
+        }
+        for mr in result.method_results
     ]
 
-    # Convert summary
+
+def _convert_skipped_methods(result: ValuationResult) -> list[dict[str, Any]]:
+    """Convert skipped methods to serializable format."""
+    return [
+        {"method": sm.method.value, "reason": sm.reason}
+        for sm in result.skipped_methods
+    ]
+
+
+def _convert_summary(result: ValuationResult) -> dict[str, Any]:
+    """Convert summary to serializable format."""
     summary_data = {
         "primary_value": str(result.summary.primary_value),
         "primary_method": result.summary.primary_method.value,
@@ -64,6 +59,7 @@ def _convert_valuation_result_to_db_format(
             else None
         ),
         "overall_confidence": result.summary.overall_confidence.value,
+        "confidence_explanation": result.summary.confidence_explanation,
         "summary_text": result.summary.summary_text,
         "selection_reason": result.summary.selection_reason,
     }
@@ -88,14 +84,19 @@ def _convert_valuation_result_to_db_format(
             "selection_steps": result.summary.method_comparison.selection_steps,
         }
 
-    # Convert config snapshot
-    config_snapshot_data = make_json_serializable(result.config_snapshot)
+    return summary_data
 
+
+def convert_result_for_response(result: ValuationResult) -> dict[str, Any]:
+    """Convert ValuationResult to API response format.
+
+    Used by routes.py to format the response for /valuations/run-and-save.
+    """
     return {
-        "method_results": method_results_data,
-        "skipped_methods": skipped_methods_data,
-        "summary": summary_data,
-        "config_snapshot": config_snapshot_data,
+        "method_results": _convert_method_results(result),
+        "skipped_methods": _convert_skipped_methods(result),
+        "summary": _convert_summary(result),
+        "config_snapshot": make_json_serializable(result.config_snapshot),
     }
 
 
@@ -171,7 +172,7 @@ class ValuationService:
                 )
 
             # Convert valuation result to database format
-            db_data = _convert_valuation_result_to_db_format(result)
+            db_data = convert_result_for_response(result)
 
             # Save the valuation
             saved_valuation = await crud.create_valuation(

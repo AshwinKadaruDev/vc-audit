@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Optional
 
 from src.config import ValuationConfig
-from src.data.loader import DataLoader
+from src.database.loader import DataLoader
 from src.models import (
     CompanyData,
     Confidence,
@@ -113,6 +113,14 @@ class LastRoundMethod(ValuationMethod):
         market_adjustment = Decimal("1.0") + adjusted_return
         market_adjusted_value = anchor_value * market_adjustment
 
+        # Get data source info for citation
+        index_source = self.loader.get_index_source(self._index_name)
+        data_source_info = {
+            "name": index_source.name,
+            "retrieved_at": index_source.retrieved_at.isoformat(),
+            "citation": f"Market index data from {index_source.name}",
+        }
+
         self._add_step(
             description="Market Adjustment: How Has the Market Moved?",
             inputs={
@@ -131,6 +139,7 @@ class LastRoundMethod(ValuationMethod):
                     f"we adjust the valuation by {round_decimal(beta * 10, 0)}%."
                 ),
                 "adjusted_change_percent": f"{direction_symbol}{round_decimal(adjusted_return * 100, 1)}%",
+                "data_source": data_source_info,
             },
             calculation=(
                 f"The {self._index_name} {direction} by {abs(round_decimal(market_return_pct, 1))}% "
@@ -141,56 +150,68 @@ class LastRoundMethod(ValuationMethod):
         )
 
         # Step 3: Apply Company-Specific Adjustments
-        final_value = market_adjusted_value
-        if self.company_data.adjustments:
-            combined_factor = Decimal("1.0")
-            adjustment_list = []
+        final_value, combined_factor, adjustment_derivation_parts = (
+            self._apply_company_adjustments(market_adjusted_value, "market-adjusted value")
+        )
 
-            for adj in self.company_data.adjustments:
-                combined_factor *= adj.factor
-                pct_change = (adj.factor - 1) * 100
-                sign = "+" if pct_change >= 0 else ""
-                adjustment_list.append({
-                    "name": adj.name,
-                    "impact": f"{sign}{round_decimal(pct_change, 0)}%",
-                    "reason": adj.reason,
-                })
+        # Step 4: Final Formula Summary
+        # Build variable derivations
+        post_money_derivation = (
+            f"From {last_round.round_type.value.replace('_', ' ').title()} round on {round_date_str}"
+        ) if hasattr(last_round, 'round_type') else f"From funding round on {round_date_str}"
 
-            final_value = market_adjusted_value * combined_factor
-            total_adjustment_pct = (combined_factor - 1) * 100
-            total_sign = "+" if total_adjustment_pct >= 0 else ""
+        market_adj_derivation = (
+            f"1 + ({beta} × {round_decimal(market_return_pct, 1)}%) = {round_decimal(market_adjustment, 3)}"
+        )
 
-            self._add_step(
-                description="Company-Specific Adjustments",
-                inputs={
-                    "type": "company_adjustments",
-                    "adjustments": adjustment_list,
-                    "total_adjustment": f"{total_sign}{round_decimal(total_adjustment_pct, 1)}%",
-                },
-                calculation=(
-                    f"Combined adjustment of {total_sign}{round_decimal(total_adjustment_pct, 1)}% "
-                    f"applied to market-adjusted value."
-                ),
-                result=f"Final valuation: {format_currency(final_value)}",
-            )
+        if adjustment_derivation_parts:
+            company_adj_derivation = f"Product of: {', '.join(adjustment_derivation_parts)}"
         else:
-            self._add_step(
-                description="Company-Specific Adjustments",
-                inputs={
-                    "type": "company_adjustments",
-                    "adjustments": [],
-                    "total_adjustment": "0%",
-                },
-                calculation="No company-specific adjustments applied.",
-                result=f"Final valuation: {format_currency(final_value)}",
-            )
+            company_adj_derivation = "No adjustments applied (factor = 1.0)"
 
-        confidence = self._determine_confidence(months_old)
+        self._add_step(
+            description="Final Formula Summary",
+            inputs={
+                "type": "final_formula",
+                "formula_template": "V = P × M × C",
+                "formula_display": "Final Value = Post-Money × Market Adjustment × Company Adjustments",
+                "formula_with_values": (
+                    f"{format_currency(anchor_value)} × {round_decimal(market_adjustment, 3)} × "
+                    f"{round_decimal(combined_factor, 3)} = {format_currency(final_value)}"
+                ),
+                "variables": [
+                    {
+                        "name": "Post-Money Valuation",
+                        "symbol": "P",
+                        "value": format_currency(anchor_value),
+                        "derivation": post_money_derivation,
+                    },
+                    {
+                        "name": "Market Adjustment",
+                        "symbol": "M",
+                        "value": str(round_decimal(market_adjustment, 3)),
+                        "derivation": market_adj_derivation,
+                    },
+                    {
+                        "name": "Company Adjustments",
+                        "symbol": "C",
+                        "value": str(round_decimal(combined_factor, 3)),
+                        "derivation": company_adj_derivation,
+                    },
+                ],
+                "final_value": format_currency(final_value),
+                "method_name": "Last Round",
+            },
+            result=f"Final valuation: {format_currency(final_value)}",
+        )
+
+        confidence, confidence_explanation = self._determine_confidence(months_old)
 
         return MethodResult(
             method=self.method_name,
             value=round_decimal(final_value, 0),
             confidence=confidence,
+            confidence_explanation=confidence_explanation,
             audit_trail=self._audit_steps,
             warnings=self._warnings,
         )
@@ -200,10 +221,33 @@ class LastRoundMethod(ValuationMethod):
         closest = min(index_data, key=lambda x: abs((x.date - target_date).days))
         return closest.value
 
-    def _determine_confidence(self, months_old: int) -> Confidence:
-        """Determine confidence based on round age."""
+    def _determine_confidence(self, months_old: int) -> tuple[Confidence, str]:
+        """Determine confidence based on round age.
+
+        Returns:
+            Tuple of (confidence level, explanation string).
+        """
         if months_old <= 6:
-            return Confidence.HIGH
+            explanation = (
+                f"HIGH confidence: The funding round is {months_old} months old, "
+                f"which is within the 6-month threshold for high confidence. "
+                f"Recent rounds reflect current market conditions."
+            )
+            return Confidence.HIGH, explanation
+
         if months_old <= self.config.stale_round_threshold_months:
-            return Confidence.MEDIUM
-        return Confidence.LOW
+            explanation = (
+                f"MEDIUM confidence: The funding round is {months_old} months old. "
+                f"Rounds between 6-{self.config.stale_round_threshold_months} months have medium confidence "
+                f"because market conditions may have shifted. "
+                f"Rounds under 6 months would be HIGH confidence."
+            )
+            return Confidence.MEDIUM, explanation
+
+        explanation = (
+            f"LOW confidence: The funding round is {months_old} months old, "
+            f"which exceeds the {self.config.stale_round_threshold_months}-month threshold. "
+            f"Older rounds may not reflect current market conditions. "
+            f"Consider supplementing with other valuation methods."
+        )
+        return Confidence.LOW, explanation

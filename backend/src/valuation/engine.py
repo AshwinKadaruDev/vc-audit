@@ -5,9 +5,9 @@ from decimal import Decimal
 from typing import Optional
 
 from src.config import ValuationConfig, get_settings
-from src.data.loader import DataLoader
+from src.database.loader import DataLoader
 from src.exceptions import NoValidMethodsError
-from src.methods.base import MethodRegistry, ValuationMethod
+from src.valuation.base import MethodRegistry, ValuationMethod
 from src.models import (
     CompanyData,
     Confidence,
@@ -22,7 +22,7 @@ from src.models import (
 from src.utils.math_utils import format_currency, round_decimal
 
 # Import methods to register them
-from src.methods import last_round, comps  # noqa: F401
+from src.valuation import last_round, comps  # noqa: F401
 
 
 class ValuationEngine:
@@ -180,10 +180,15 @@ class ValuationEngine:
         Returns:
             ValuationSummary with primary value and confidence.
         """
-        # Sort by confidence (highest first)
+        # Sort by confidence (highest first), then by method preference for tie-breaking
+        # When confidence is equal, prefer Last Round because it represents what
+        # informed investors actually paid for this specific company, rather than
+        # an estimate derived from similar (but different) public companies.
         confidence_order = {Confidence.HIGH: 0, Confidence.MEDIUM: 1, Confidence.LOW: 2}
+        method_preference = {MethodName.LAST_ROUND: 0, MethodName.COMPARABLES: 1}
         sorted_results = sorted(
-            results, key=lambda r: confidence_order[r.confidence]
+            results,
+            key=lambda r: (confidence_order[r.confidence], method_preference.get(r.method, 99))
         )
 
         primary = sorted_results[0]
@@ -198,7 +203,7 @@ class ValuationEngine:
             value_range_high = None
 
         # Determine overall confidence
-        overall_confidence = self._calculate_overall_confidence(results)
+        overall_confidence, confidence_explanation = self._calculate_overall_confidence(results)
 
         # Generate summary text
         summary_parts = [
@@ -227,6 +232,7 @@ class ValuationEngine:
             value_range_low=value_range_low,
             value_range_high=value_range_high,
             overall_confidence=overall_confidence,
+            confidence_explanation=confidence_explanation,
             summary_text="".join(summary_parts),
             selection_reason=selection_reason,
             method_comparison=method_comparison,
@@ -373,11 +379,20 @@ class ValuationEngine:
         other_results = [r for r in sorted_results if r.method != primary.method]
 
         if all(r.confidence == primary.confidence for r in results):
-            # Same confidence - explain the tiebreaker
-            parts.append(
-                f"because it provides more direct market evidence, even though "
-                f"both methods have {primary.confidence.value} confidence."
-            )
+            # Same confidence - explain the tiebreaker with principled reasoning
+            if primary.method == MethodName.LAST_ROUND:
+                parts.append(
+                    f"because both methods have {primary.confidence.value} confidence, "
+                    f"and Last Round reflects what informed investors actually paid for "
+                    f"this specific company after due diligence, rather than an estimate "
+                    f"derived from similar but different public companies."
+                )
+            else:
+                parts.append(
+                    f"because both methods have {primary.confidence.value} confidence, "
+                    f"and Comparables uses current market data which may better reflect "
+                    f"today's valuation environment."
+                )
         elif primary.confidence != other_results[0].confidence:
             # Higher confidence
             other_conf = other_results[0].confidence.value
@@ -424,39 +439,87 @@ class ValuationEngine:
 
     def _calculate_overall_confidence(
         self, results: list[MethodResult]
-    ) -> Confidence:
+    ) -> tuple[Confidence, str]:
         """Calculate overall confidence from individual method confidences.
 
         Uses weighted approach:
         - If any method is HIGH and others agree within spread, HIGH
         - If methods disagree significantly, drop confidence
+
+        Returns:
+            Tuple of (confidence level, explanation string).
         """
         confidences = [r.confidence for r in results]
 
         # Single method case
         if len(results) == 1:
-            return results[0].confidence
+            explanation = (
+                f"Overall confidence is {results[0].confidence.value.upper()} based on "
+                f"the single applicable method ({self._method_display_name(results[0].method)})."
+            )
+            return results[0].confidence, explanation
 
         # Multiple methods - check agreement
         values = [r.value for r in results]
         min_val = min(values)
         max_val = max(values)
         spread = (max_val - min_val) / min_val if min_val > 0 else Decimal("1")
+        spread_pct = round_decimal(spread * 100, 1)
+
+        # Format values for explanation
+        method_values = ", ".join(
+            f"{self._method_display_name(r.method)}: {format_currency(r.value)}"
+            for r in results
+        )
 
         # If methods agree well
         if spread <= self.config.high_confidence_spread:
-            # Boost if any is HIGH
             if Confidence.HIGH in confidences:
-                return Confidence.HIGH
-            return Confidence.MEDIUM
+                explanation = (
+                    f"HIGH confidence: Methods agree well ({spread_pct}% spread, "
+                    f"below {round_decimal(self.config.high_confidence_spread * 100, 0)}% threshold). "
+                    f"Values: {method_values}. "
+                    f"Using highest individual method confidence."
+                )
+                return Confidence.HIGH, explanation
+            explanation = (
+                f"MEDIUM confidence: Methods agree well ({spread_pct}% spread, "
+                f"below {round_decimal(self.config.high_confidence_spread * 100, 0)}% threshold). "
+                f"Values: {method_values}. "
+                f"No method has HIGH confidence individually."
+            )
+            return Confidence.MEDIUM, explanation
 
         # Moderate disagreement
         if spread <= self.config.medium_confidence_spread:
             if all(c == Confidence.HIGH for c in confidences):
-                return Confidence.MEDIUM
+                explanation = (
+                    f"MEDIUM confidence: Moderate spread between methods ({spread_pct}%, "
+                    f"below {round_decimal(self.config.medium_confidence_spread * 100, 0)}% threshold). "
+                    f"Values: {method_values}. "
+                    f"Confidence capped at MEDIUM despite individual HIGH confidence."
+                )
+                return Confidence.MEDIUM, explanation
             if Confidence.LOW in confidences:
-                return Confidence.LOW
-            return Confidence.MEDIUM
+                explanation = (
+                    f"LOW confidence: Moderate spread between methods ({spread_pct}%), "
+                    f"and at least one method has LOW confidence. "
+                    f"Values: {method_values}."
+                )
+                return Confidence.LOW, explanation
+            explanation = (
+                f"MEDIUM confidence: Moderate spread between methods ({spread_pct}%, "
+                f"below {round_decimal(self.config.medium_confidence_spread * 100, 0)}% threshold). "
+                f"Values: {method_values}."
+            )
+            return Confidence.MEDIUM, explanation
 
         # High disagreement - reduce confidence
-        return Confidence.LOW
+        explanation = (
+            f"LOW confidence: The methods produced values of {method_values} "
+            f"({spread_pct}% spread). When methods disagree by more than "
+            f"{round_decimal(self.config.medium_confidence_spread * 100, 0)}%, "
+            f"overall confidence is LOW regardless of individual method confidence. "
+            f"This flags the valuation for manual review."
+        )
+        return Confidence.LOW, explanation

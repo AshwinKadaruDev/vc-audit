@@ -1,7 +1,17 @@
-import { useState, useEffect } from 'react';
-import type { CompanyData } from '../types';
+import { useState, useEffect, useRef } from 'react';
+import type { CompanyData, PortfolioCompany } from '../types';
 import { CompaniesAPI, PortfolioCompaniesAPI } from '../api';
 import { STAGES, LEAD_INVESTORS, ADJUSTMENT_PRESETS } from '../constants';
+
+// Fisher-Yates shuffle
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 
 interface CompanyFormProps {
   onProcess: (data: CompanyData) => void;
@@ -27,6 +37,10 @@ export function CompanyForm({ onProcess, loading }: CompanyFormProps) {
   const [randomizing, setRandomizing] = useState(false);
   const [selectedAdjustmentId, setSelectedAdjustmentId] = useState<string>('');
 
+  // Round-robin randomization: cycle through shuffled companies
+  const companiesRef = useRef<PortfolioCompany[]>([]);
+  const indexRef = useRef(0);
+
   useEffect(() => {
     CompaniesAPI.listSectors()
       .then((sectorList) => {
@@ -44,7 +58,16 @@ export function CompanyForm({ onProcess, loading }: CompanyFormProps) {
   const handleRandomize = async () => {
     setRandomizing(true);
     try {
-      const randomCompany = await PortfolioCompaniesAPI.getRandom();
+      // Fetch and shuffle companies on first click, or reshuffle when we've cycled through all
+      if (companiesRef.current.length === 0 || indexRef.current >= companiesRef.current.length) {
+        const allCompanies = await PortfolioCompaniesAPI.list();
+        companiesRef.current = shuffleArray(allCompanies);
+        indexRef.current = 0;
+      }
+
+      // Get next company in the shuffled list
+      const randomCompany = companiesRef.current[indexRef.current];
+      indexRef.current++;
 
       // Convert PortfolioCompany to CompanyData format
       const companyData: CompanyData = {

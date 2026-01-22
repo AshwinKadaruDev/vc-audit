@@ -2,6 +2,7 @@
   "indices": [
     {
       "name": "NASDAQ",
+      "source_name": "Yahoo Finance API",
       "data": [
         {"date": "2022-01-01", "value": "15644.97"},
         {"date": "2022-07-01", "value": "11028.74"},
@@ -16,6 +17,7 @@
     },
     {
       "name": "SP500",
+      "source_name": "Yahoo Finance API",
       "data": [
         {"date": "2022-01-01", "value": "4766.18"},
         {"date": "2022-07-01", "value": "3785.38"},

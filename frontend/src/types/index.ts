@@ -41,6 +41,14 @@ export interface CompanyData {
   adjustments: Adjustment[];
 }
 
+// Data source citation for audit trail
+export interface DataSourceInfo {
+  name: string;
+  retrieved_at: string;
+  is_mock: boolean;
+  citation: string;
+}
+
 // Result models
 export interface AuditStep {
   step_number: number;
@@ -54,6 +62,7 @@ export interface MethodResult {
   method: MethodName;
   value: string;
   confidence: Confidence;
+  confidence_explanation: string;
   audit_trail: AuditStep[];
   warnings: string[];
 }
@@ -83,6 +92,7 @@ export interface ValuationSummary {
   value_range_low?: string;
   value_range_high?: string;
   overall_confidence: Confidence;
+  confidence_explanation: string;
   summary_text: string;
   selection_reason: string;
   method_comparison?: MethodComparisonData;
@@ -142,6 +152,7 @@ export interface SavedValuation {
     value_range_low?: string;
     value_range_high?: string;
     overall_confidence: string;
+    confidence_explanation: string;
     summary_text: string;
     selection_reason: string;
     method_comparison?: {
@@ -160,6 +171,7 @@ export interface SavedValuation {
     method: string;
     value: string;
     confidence: string;
+    confidence_explanation: string;
     audit_trail: AuditStep[];
     warnings: string[];
   }>;

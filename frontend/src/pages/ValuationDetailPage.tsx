@@ -60,6 +60,7 @@ export function ValuationDetailPage() {
     value_range_low: valuation.summary.value_range_low,
     value_range_high: valuation.summary.value_range_high,
     overall_confidence: valuation.summary.overall_confidence as Confidence,
+    confidence_explanation: valuation.summary.confidence_explanation,
     summary_text: valuation.summary.summary_text,
     selection_reason: valuation.summary.selection_reason,
     method_comparison: methodComparison,
@@ -69,6 +70,7 @@ export function ValuationDetailPage() {
     method: mr.method as MethodName,
     value: mr.value,
     confidence: mr.confidence as Confidence,
+    confidence_explanation: mr.confidence_explanation,
     audit_trail: mr.audit_trail,
     warnings: mr.warnings,
   }));
@@ -103,6 +105,8 @@ export function ValuationDetailPage() {
         methodResults={methodResults}
         skippedMethods={skippedMethods}
         methodComparison={summary.method_comparison}
+        overallConfidence={summary.overall_confidence}
+        overallConfidenceExplanation={summary.confidence_explanation}
       />
     </div>
   );

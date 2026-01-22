@@ -1,6 +1,7 @@
 {
   "sector": "saas",
   "as_of_date": "2026-01-15",
+  "source_name": "Yahoo Finance API",
   "companies": [
     {
       "ticker": "CRM",

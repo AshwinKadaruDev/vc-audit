@@ -40,3 +40,7 @@ class ComparableCompany(Base):
         Numeric(precision=10, scale=4), nullable=True
     )
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    source_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default="Yahoo Finance API"
+    )
+    source_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

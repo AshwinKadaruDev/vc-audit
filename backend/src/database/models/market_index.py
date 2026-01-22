@@ -23,5 +23,8 @@ class MarketIndex(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     value: Mapped[Decimal] = mapped_column(Numeric(precision=20, scale=2), nullable=False)
+    source_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default="Yahoo Finance API"
+    )
 
     __table_args__ = (PrimaryKeyConstraint("name", "date"),)

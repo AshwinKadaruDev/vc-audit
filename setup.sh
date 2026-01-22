@@ -5,7 +5,11 @@
 #   1. uv (https://docs.astral.sh/uv/)
 #   2. Node.js 18+
 #   3. PostgreSQL running with database 'vc_audit' created
-#   4. backend/.env file configured (copy from backend/.env.example)
+#
+# This script will:
+#   - Install backend Python dependencies
+#   - Run database migrations (creates tables + seeds sample data from JSON files)
+#   - Install frontend Node.js dependencies
 
 set -e
 
@@ -14,7 +18,7 @@ echo "=== VC Audit Tool Setup ==="
 echo ""
 
 # Check uv
-echo "[1/4] Checking uv..."
+echo "[1/6] Checking uv..."
 if ! command -v uv &> /dev/null; then
     echo "  ERROR: uv not found. Install from https://docs.astral.sh/uv/"
     exit 1
@@ -22,7 +26,7 @@ fi
 echo "  OK: $(uv --version)"
 
 # Check Node
-echo "[2/4] Checking Node.js..."
+echo "[2/6] Checking Node.js..."
 if ! command -v node &> /dev/null; then
     echo "  ERROR: Node.js not found"
     exit 1
@@ -30,7 +34,7 @@ fi
 echo "  OK: Node $(node --version)"
 
 # Check .env file
-echo "[3/4] Checking environment..."
+echo "[3/6] Checking environment..."
 if [ ! -f "backend/.env" ]; then
     echo "  backend/.env not found - creating from .env.example"
 
@@ -91,7 +95,7 @@ else
 fi
 
 # Setup backend with uv
-echo "[4/4] Setting up backend..."
+echo "[4/6] Installing backend dependencies..."
 cd backend
 uv sync --all-extras
 if [ $? -ne 0 ]; then
@@ -102,28 +106,35 @@ cd ..
 echo "  OK: Python dependencies installed"
 
 # Run migrations
-echo ""
-echo "[5/5] Running database migrations..."
+echo "[5/6] Running database migrations..."
+echo "  This creates tables and seeds sample data from JSON files"
 cd backend
 export $(grep -v '^#' .env | xargs)
 uv run alembic upgrade head
 if [ $? -ne 0 ]; then
     echo "  ERROR: Migration failed. Check DATABASE_URL in backend/.env"
+    echo "  Make sure PostgreSQL is running and the database 'vc_audit' exists."
     exit 1
 fi
 cd ..
-echo "  OK: Database ready"
+echo "  OK: Database tables created and sample data seeded"
 
 # Frontend
-echo ""
 echo "[6/6] Installing frontend dependencies..."
 cd frontend
 npm install --silent 2>/dev/null
 cd ..
-echo "  OK: Frontend ready"
+echo "  OK: Frontend dependencies installed"
 
 echo ""
-echo "=== Setup Complete ==="
+echo "======================================="
+echo "         Setup Complete!              "
+echo "======================================="
 echo ""
-echo "Run the app:  ./run.sh"
+echo "To start the application:"
+echo "  ./run.sh"
+echo ""
+echo "This will start:"
+echo "  - Backend API at http://localhost:8000"
+echo "  - Frontend at http://localhost:5173"
 echo ""

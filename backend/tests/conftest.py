@@ -7,9 +7,9 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from src.config import Settings, ValuationConfig
-from src.data.loader import DataLoader
+from src.database.loader import DataLoader
 from src.database import models
-from src.engine.engine import ValuationEngine
+from src.valuation.engine import ValuationEngine
 
 
 @pytest.fixture

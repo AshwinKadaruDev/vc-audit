@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, Type
 
 from src.config import ValuationConfig
-from src.data.loader import DataLoader
+from src.database.loader import DataLoader
 from src.models import (
     AuditStep,
     CompanyData,
@@ -71,6 +71,72 @@ class ValuationMethod(ABC):
             warning: Warning message.
         """
         self._warnings.append(warning)
+
+    def _apply_company_adjustments(
+        self, base_value: "Decimal", value_label: str = "base value"
+    ) -> tuple["Decimal", "Decimal", list[str]]:
+        """Apply company-specific adjustments and add audit step.
+
+        Args:
+            base_value: The value to apply adjustments to.
+            value_label: Label for the base value in audit trail (e.g., "base value", "market-adjusted value").
+
+        Returns:
+            Tuple of (final_value, combined_factor, adjustment_derivation_parts).
+        """
+        from decimal import Decimal
+        from src.utils.math_utils import format_currency, round_decimal
+
+        final_value = base_value
+        combined_factor = Decimal("1.0")
+        adjustment_derivation_parts: list[str] = []
+
+        if self.company_data.adjustments:
+            adjustment_list = []
+
+            for adj in self.company_data.adjustments:
+                combined_factor *= adj.factor
+                pct_change = (adj.factor - 1) * 100
+                sign = "+" if pct_change >= 0 else ""
+                adjustment_list.append({
+                    "name": adj.name,
+                    "impact": f"{sign}{round_decimal(pct_change, 0)}%",
+                    "reason": adj.reason,
+                })
+                adjustment_derivation_parts.append(
+                    f"{adj.name} ({sign}{round_decimal(pct_change, 0)}%)"
+                )
+
+            final_value = base_value * combined_factor
+            total_adjustment_pct = (combined_factor - 1) * 100
+            total_sign = "+" if total_adjustment_pct >= 0 else ""
+
+            self._add_step(
+                description="Company-Specific Adjustments",
+                inputs={
+                    "type": "company_adjustments",
+                    "adjustments": adjustment_list,
+                    "total_adjustment": f"{total_sign}{round_decimal(total_adjustment_pct, 1)}%",
+                },
+                calculation=(
+                    f"Combined adjustment of {total_sign}{round_decimal(total_adjustment_pct, 1)}% "
+                    f"applied to {value_label}."
+                ),
+                result=f"Adjusted valuation: {format_currency(final_value)}",
+            )
+        else:
+            self._add_step(
+                description="Company-Specific Adjustments",
+                inputs={
+                    "type": "company_adjustments",
+                    "adjustments": [],
+                    "total_adjustment": "0%",
+                },
+                calculation="No company-specific adjustments applied.",
+                result=f"Adjusted valuation: {format_currency(final_value)}",
+            )
+
+        return final_value, combined_factor, adjustment_derivation_parts
 
     @abstractmethod
     def check_prerequisites(self) -> Optional[str]:

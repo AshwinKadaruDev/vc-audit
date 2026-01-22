@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.engine.engine import ValuationEngine
+from src.valuation.engine import ValuationEngine
 from src.exceptions import NoValidMethodsError
 from src.models import Confidence, MethodName
 

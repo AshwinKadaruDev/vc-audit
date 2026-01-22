@@ -4,7 +4,11 @@
 #   1. uv (https://docs.astral.sh/uv/)
 #   2. Node.js 18+
 #   3. PostgreSQL running with database 'vc_audit' created
-#   4. backend/.env file configured (copy from backend/.env.example)
+#
+# This script will:
+#   - Install backend Python dependencies
+#   - Run database migrations (creates tables + seeds sample data from JSON files)
+#   - Install frontend Node.js dependencies
 
 $ErrorActionPreference = "Stop"
 
@@ -13,7 +17,7 @@ Write-Host "=== VC Audit Tool Setup ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Check uv
-Write-Host "[1/4] Checking uv..." -ForegroundColor Yellow
+Write-Host "[1/6] Checking uv..." -ForegroundColor Yellow
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "  ERROR: uv not found. Install from https://docs.astral.sh/uv/" -ForegroundColor Red
     exit 1
@@ -21,7 +25,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 Write-Host "  OK: $(uv --version)" -ForegroundColor Green
 
 # Check Node
-Write-Host "[2/4] Checking Node.js..." -ForegroundColor Yellow
+Write-Host "[2/6] Checking Node.js..." -ForegroundColor Yellow
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "  ERROR: Node.js not found" -ForegroundColor Red
     exit 1
@@ -29,7 +33,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 Write-Host "  OK: Node $(node --version)" -ForegroundColor Green
 
 # Check .env file
-Write-Host "[3/4] Checking environment..." -ForegroundColor Yellow
+Write-Host "[3/6] Checking environment..." -ForegroundColor Yellow
 if (-not (Test-Path "backend\.env")) {
     Write-Host "  backend\.env not found - creating from .env.example" -ForegroundColor Yellow
 
@@ -95,7 +99,7 @@ if (-not (Test-Path "backend\.env")) {
 }
 
 # Setup backend with uv
-Write-Host "[4/4] Setting up backend..." -ForegroundColor Yellow
+Write-Host "[4/6] Installing backend dependencies..." -ForegroundColor Yellow
 Push-Location backend
 uv sync --all-extras
 if ($LASTEXITCODE -ne 0) {
@@ -107,8 +111,8 @@ Pop-Location
 Write-Host "  OK: Python dependencies installed" -ForegroundColor Green
 
 # Run migrations
-Write-Host ""
-Write-Host "[5/5] Running database migrations..." -ForegroundColor Yellow
+Write-Host "[5/6] Running database migrations..." -ForegroundColor Yellow
+Write-Host "  This creates tables and seeds sample data from JSON files" -ForegroundColor Gray
 Push-Location backend
 # Load .env for DATABASE_URL
 Get-Content ".env" | ForEach-Object {
@@ -122,21 +126,28 @@ uv run alembic upgrade head
 if ($LASTEXITCODE -ne 0) {
     Pop-Location
     Write-Host "  ERROR: Migration failed. Check DATABASE_URL in backend\.env" -ForegroundColor Red
+    Write-Host "  Make sure PostgreSQL is running and the database 'vc_audit' exists." -ForegroundColor Yellow
     exit 1
 }
 Pop-Location
-Write-Host "  OK: Database ready" -ForegroundColor Green
+Write-Host "  OK: Database tables created and sample data seeded" -ForegroundColor Green
 
 # Frontend
-Write-Host ""
 Write-Host "[6/6] Installing frontend dependencies..." -ForegroundColor Yellow
 Push-Location frontend
 npm install --silent 2>$null
 Pop-Location
-Write-Host "  OK: Frontend ready" -ForegroundColor Green
+Write-Host "  OK: Frontend dependencies installed" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "=== Setup Complete ===" -ForegroundColor Green
+Write-Host "=======================================" -ForegroundColor Green
+Write-Host "         Setup Complete!              " -ForegroundColor Green
+Write-Host "=======================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Run the app:  .\run.ps1" -ForegroundColor Cyan
+Write-Host "To start the application:" -ForegroundColor Cyan
+Write-Host "  .\run.ps1" -ForegroundColor White
+Write-Host ""
+Write-Host "This will start:" -ForegroundColor Gray
+Write-Host "  - Backend API at http://localhost:8000" -ForegroundColor Gray
+Write-Host "  - Frontend at http://localhost:5173" -ForegroundColor Gray
 Write-Host ""

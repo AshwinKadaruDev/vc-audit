@@ -15,7 +15,7 @@ from uuid import UUID
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from src.utils.retry import async_retry_on_exception
 
@@ -599,3 +599,166 @@ async def get_market_index_date_range(
         return None
 
     return (row.min_date, row.max_date)
+
+
+async def get_market_index_time_series(
+    db: AsyncSession, index_name: str
+) -> list[models.MarketIndex]:
+    """Get full time series for a market index.
+
+    Args:
+        db: Database session.
+        index_name: Index identifier (e.g., 'NASDAQ', 'SP500').
+
+    Returns:
+        List of MarketIndex records ordered by date.
+    """
+    result = await db.execute(
+        select(models.MarketIndex)
+        .where(models.MarketIndex.name == index_name)
+        .order_by(models.MarketIndex.date)
+    )
+    return list(result.scalars().all())
+
+
+async def get_market_index_source(
+    db: AsyncSession, index_name: str
+) -> Optional[str]:
+    """Get the source name for a market index.
+
+    Args:
+        db: Database session.
+        index_name: Index identifier.
+
+    Returns:
+        Source name or None if no data.
+    """
+    result = await db.execute(
+        select(models.MarketIndex.source_name)
+        .where(models.MarketIndex.name == index_name)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+# ============================================================================
+# SYNCHRONOUS CRUD OPERATIONS
+# ============================================================================
+# Used by DataLoader for sync operations. These mirror the async versions
+# but use synchronous Session instead of AsyncSession.
+
+
+def get_all_sectors_sync(db: Session) -> list[models.Sector]:
+    """Get all available sectors (sync version).
+
+    Args:
+        db: Synchronous database session.
+
+    Returns:
+        List of Sector objects ordered by display name.
+    """
+    result = db.execute(
+        select(models.Sector).order_by(models.Sector.display_name)
+    )
+    return list(result.scalars().all())
+
+
+def get_comparables_by_sector_sync(
+    db: Session, sector_id: str
+) -> list[models.ComparableCompany]:
+    """Get all comparable companies for a sector (sync version).
+
+    Args:
+        db: Synchronous database session.
+        sector_id: The sector to filter by (e.g., 'saas', 'fintech').
+
+    Returns:
+        List of ComparableCompany objects for the sector,
+        ordered by market cap (highest first).
+    """
+    result = db.execute(
+        select(models.ComparableCompany)
+        .where(models.ComparableCompany.sector_id == sector_id)
+        .order_by(desc(models.ComparableCompany.market_cap))
+    )
+    return list(result.scalars().all())
+
+
+def get_market_index_time_series_sync(
+    db: Session, index_name: str
+) -> list[models.MarketIndex]:
+    """Get full time series for a market index (sync version).
+
+    Args:
+        db: Synchronous database session.
+        index_name: Index identifier (e.g., 'NASDAQ', 'SP500').
+
+    Returns:
+        List of MarketIndex records ordered by date.
+    """
+    result = db.execute(
+        select(models.MarketIndex)
+        .where(models.MarketIndex.name == index_name)
+        .order_by(models.MarketIndex.date)
+    )
+    return list(result.scalars().all())
+
+
+def get_market_index_source_sync(
+    db: Session, index_name: str
+) -> Optional[str]:
+    """Get the source name for a market index (sync version).
+
+    Args:
+        db: Synchronous database session.
+        index_name: Index identifier.
+
+    Returns:
+        Source name or None if no data.
+    """
+    result = db.execute(
+        select(models.MarketIndex.source_name)
+        .where(models.MarketIndex.name == index_name)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def list_portfolio_companies_sync(
+    db: Session, limit: int = 50, offset: int = 0
+) -> list[models.PortfolioCompany]:
+    """List portfolio companies, most recent first (sync version).
+
+    Args:
+        db: Synchronous database session.
+        limit: Maximum number of results.
+        offset: Number of results to skip.
+
+    Returns:
+        List of PortfolioCompany objects.
+    """
+    result = db.execute(
+        select(models.PortfolioCompany)
+        .order_by(desc(models.PortfolioCompany.created_at))
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(result.scalars().all())
+
+
+def get_portfolio_company_by_id_sync(
+    db: Session, company_id: UUID
+) -> Optional[models.PortfolioCompany]:
+    """Get a portfolio company by ID (sync version).
+
+    Args:
+        db: Synchronous database session.
+        company_id: The company UUID.
+
+    Returns:
+        PortfolioCompany if found, None otherwise.
+    """
+    result = db.execute(
+        select(models.PortfolioCompany).where(models.PortfolioCompany.id == company_id)
+    )
+    return result.scalar_one_or_none()

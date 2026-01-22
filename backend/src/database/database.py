@@ -1,21 +1,42 @@
 """SQLAlchemy database engine and session management."""
 
 import os
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional
+from contextlib import asynccontextmanager, contextmanager
+from typing import AsyncGenerator, Generator, Optional
 
+from sqlalchemy import create_engine as create_sync_engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.orm import Session, sessionmaker
 
 from src.config import get_settings
 
 
+def _get_raw_database_url() -> str:
+    """Get raw database URL from environment.
+
+    Returns:
+        Raw database URL string.
+
+    Raises:
+        ValueError: If DATABASE_URL is not set.
+    """
+    settings = get_settings()
+    url = settings.database_url or os.getenv("DATABASE_URL")
+    if not url:
+        raise ValueError(
+            "DATABASE_URL environment variable is required. "
+            "Set it in .env file."
+        )
+    return url
+
+
 def get_database_url() -> str:
-    """Get database URL from environment.
+    """Get database URL for async driver (asyncpg).
 
     Returns:
         Database URL string for SQLAlchemy (postgresql+asyncpg://...).
@@ -23,20 +44,35 @@ def get_database_url() -> str:
     Raises:
         ValueError: If DATABASE_URL is not set.
     """
-    settings = get_settings()
-    # Try settings first, then fall back to os.getenv for backward compatibility
-    url = settings.database_url or os.getenv("DATABASE_URL")
-    if not url:
-        raise ValueError(
-            "DATABASE_URL environment variable is required. "
-            "Set it in .env file."
-        )
+    url = _get_raw_database_url()
 
     # SQLAlchemy uses postgresql+asyncpg:// instead of postgresql://
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+    return url
+
+
+def get_sync_database_url() -> str:
+    """Get database URL for sync driver (psycopg2).
+
+    Returns:
+        Database URL string for SQLAlchemy (postgresql+psycopg2://...).
+
+    Raises:
+        ValueError: If DATABASE_URL is not set.
+    """
+    url = _get_raw_database_url()
+
+    # Use psycopg2 for sync operations
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
 
     return url
 
@@ -179,3 +215,63 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+
+
+# ============================================================================
+# SYNCHRONOUS DATABASE ACCESS
+# ============================================================================
+# Used by DataLoader for sync operations (e.g., valuation methods that are
+# not async). The async FastAPI app uses the async engine/session above.
+
+# Global sync session factory - lazily initialized
+_SyncSessionLocal: Optional[sessionmaker[Session]] = None
+
+
+def _get_sync_session_factory() -> sessionmaker[Session]:
+    """Get or create the sync session factory.
+
+    Lazily creates the sync engine and session factory on first use.
+
+    Returns:
+        Configured sessionmaker for sync sessions.
+    """
+    global _SyncSessionLocal
+    if _SyncSessionLocal is None:
+        sync_engine = create_sync_engine(
+            get_sync_database_url(),
+            pool_pre_ping=True,
+            pool_size=5,  # Smaller pool for sync operations
+            max_overflow=10,
+        )
+        _SyncSessionLocal = sessionmaker(
+            bind=sync_engine,
+            expire_on_commit=False,
+            autoflush=False,
+        )
+    return _SyncSessionLocal
+
+
+@contextmanager
+def get_sync_db() -> Generator[Session, None, None]:
+    """Context manager for synchronous database sessions.
+
+    Use this in DataLoader and other sync code that needs DB access.
+    Automatically commits on success, rolls back on error.
+
+    Usage:
+        with get_sync_db() as db:
+            sectors = crud.get_all_sectors_sync(db)
+
+    Yields:
+        Session: Synchronous database session.
+    """
+    factory = _get_sync_session_factory()
+    session = factory()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
